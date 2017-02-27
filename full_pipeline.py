@@ -3,7 +3,7 @@ import cv2
 import glob
 import pickle
 import numpy as np
-
+import pylab as plt
 
 
 def undistort(image, camera_calibration):
@@ -149,3 +149,18 @@ def pipeline(image, camera_calibration, perspective_matrix):
     # TODO: where to get vehicle_position?
     
     return final_image
+
+
+def visualize_before_after(image_before, image_after, cmap=None):
+    plt.figure(figsize=(15, 10))
+    
+    plt.subplot(1,2,1)
+    plt.imshow(image_before)
+    plt.title("Image before")
+    
+    plt.subplot(1,2,2)
+    if cmap:
+        plt.imshow(image_after, cmap=cmap)
+    else:
+        plt.imshow(image_after)
+    plt.title("Image after")
