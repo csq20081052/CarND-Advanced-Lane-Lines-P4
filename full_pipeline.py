@@ -407,7 +407,7 @@ def load_parameters():
     return camera_calibration, perspective_matrix, meters_per_pix
 
 
-def pipeline(image, camera_calibration, perspective_matrix, meters_per_pix, control_panel=False):
+def pipeline(image, camera_calibration, perspective_matrix, meters_per_pix, ret_control_panel=False):
     
     xm_per_pix, ym_per_pix = meters_per_pix
     M = perspective_matrix['M']
@@ -440,7 +440,7 @@ def pipeline(image, camera_calibration, perspective_matrix, meters_per_pix, cont
     # Output visual display of the lane boundaries and numerical estimation of lane curvature and vehicle position.
     final_image = draw_stats(image_lane, curvature, deviation)
     
-    if control_panel:
+    if ret_control_panel:
         # Let's create a cool visualization. 
         detected = visualize_detected_lines(birds_eye, windows, pixels, polynomials)
         warped = perspective(undistorted, M)
