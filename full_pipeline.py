@@ -93,6 +93,13 @@ def compute_perspective_mat(image, invert=False):
     h, w = image.shape[:2]
     h_offset = 20 # height offset for dst points
     w_offset = 150 # width offset
+    
+    points_of_interest = np.float32([(736, 466), # 1st point 
+                                 (837, 527), # 2nd point
+                                 (1039, 651), # 3rd point
+                                 (336, 651), # 4th point
+                                 (496, 527), # 5th point
+                                 (586, 466)]) # 6th point
 
     # Source points
     src = points_of_interest[[0, 2, 3, 5],:] # Biggest trapezoid
@@ -113,9 +120,9 @@ def compute_perspective_mat(image, invert=False):
     return M
 
 
-def perspective(image, perspective_matrix):
+def perspective(image, M):
     h, w = image.shape[:2]
-    warped = cv2.warpPerspective(image, perspective_matrix, (w, h))
+    warped = cv2.warpPerspective(image, M, (w, h))
     
     return warped
 
@@ -311,10 +318,17 @@ def get_deviation_from_center(image_shape, poly_meters, xm_per_pix):
     return offset_in_metters
 
 
-def draw_lane_unwarped(original_image, warped, poly, inv_M, plot=False):
+def draw_lane_unwarped(original_image, warped, poly, pixels, inv_M, plot=False):
+    
+    red = [255, 0, 0]
+    blue = [0, 0, 255]
     
     left_fit = poly[0]
     right_fit = poly[1]
+    
+    left_lane_inds = pixels[0]
+    right_lane_inds = pixels[1]
+    
     
     ploty = np.linspace(0, warped.shape[0]-1, warped.shape[0] )
     left_fitx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
@@ -332,12 +346,23 @@ def draw_lane_unwarped(original_image, warped, poly, inv_M, plot=False):
 
     # Draw the lane onto the warped blank image
     cv2.fillPoly(color_warp, np.int_([pts]), (0,255, 0))
-
+    
+    # Draw lane lines
+    nonzero = warped.nonzero()
+    nonzeroy = nonzero[0]
+    nonzerox = nonzero[1]
+    color_warp_lines = np.zeros_like(color_warp)
+    color_warp_lines[nonzeroy[left_lane_inds], nonzerox[left_lane_inds]] = blue
+    color_warp_lines[nonzeroy[right_lane_inds], nonzerox[right_lane_inds]] = red
+    
+    
     # Warp the blank back to original image space using inverse perspective matrix
-    newwarp = cv2.warpPerspective(color_warp, inv_M, (original_image.shape[1], original_image.shape[0])) 
+    newwarp_lane = cv2.warpPerspective(color_warp, inv_M, (original_image.shape[1], original_image.shape[0])) 
+    newwarp_lines = cv2.warpPerspective(color_warp_lines, inv_M, (original_image.shape[1], original_image.shape[0])) 
     
     # Combine the result with the original image
-    result = cv2.addWeighted(original_image, 1, newwarp, 0.3, 0)
+    result = cv2.addWeighted(original_image, 1, newwarp_lane, 0.3, 0)
+    result = cv2.addWeighted(result, 0.95, newwarp_lines, 1, 0)
     
     if plot:
         plt.figure(figsize=(10,5))
@@ -363,10 +388,23 @@ def draw_stats(unwarped, curvature, deviation, plot=False):
     
     return final_im
     
+    
+def load_parameters():
+    
+    path2calib_im = "./camera_cal/"
+    
+    camera_calibration = pickle.load(open(path2calib_im + "calibration_data.pkl", "rb" ))
+    perspective_matrix = pickle.load(open("./perspective_mat.pkl", "rb"))
+    meters_per_pix = pickle.load(open("./meters_per_pix.pkl", "rb"))
+    
+    return camera_calibration, perspective_matrix, meters_per_pix
+
 
 def pipeline(image, camera_calibration, perspective_matrix, meters_per_pix):
     
     xm_per_pix, ym_per_pix = meters_per_pix
+    M = perspective_matrix['M']
+    inv_M = perspective_matrix['inv_M']
     
     # Compute the camera calibration matrix and distortion coefficients given a set of chessboard images.
     # Already done in Camera calibration.ipynb
@@ -375,10 +413,10 @@ def pipeline(image, camera_calibration, perspective_matrix, meters_per_pix):
     undistorted = undistort(image, camera_calibration)
     
     # Use color transforms, gradients, etc., to create a thresholded binary image.
-    thresholded = threshold(undistorted)
+    thresholded, _, _ = threshold(undistorted)
     
     # Apply a perspective transform to rectify binary image ("birds-eye view").
-    birds_eye = perspective(thresholded, perspective_matrix)
+    birds_eye = perspective(thresholded, M)
     
     # Detect lane pixels and fit to find the lane boundary.
     windows, pixels, polynomials = detect_lanes(birds_eye)
@@ -390,7 +428,7 @@ def pipeline(image, camera_calibration, perspective_matrix, meters_per_pix):
     # TODO it lacks the definition of parameters xm_per_pix, ym_per_pix
     
     # Warp the detected lane boundaries back onto the original image.
-    image_lane = draw_lane_unwarped(image, birds_eye, polynomials, inv_M)
+    image_lane = draw_lane_unwarped(image, birds_eye, polynomials, pixels, inv_M)
     
     # Output visual display of the lane boundaries and numerical estimation of lane curvature and vehicle position.
     final_image = draw_stats(image_lane, curvature, deviation)
