@@ -298,13 +298,13 @@ def get_curvature_in_meters(image, pixels, xm_per_pix, ym_per_pix):
     return curvature, poly
 
 
-def get_deviation_from_center(image_shape, poly_meters, xm_per_pix):
+def get_deviation_from_center(image_shape, poly_meters, xm_per_pix, ym_per_pix):
     
     left_fit = poly_meters[0]
     right_fit = poly_meters[1]
     
     # We will measure the center of the car in the closest point to the car
-    y_eval = image_shape[0]
+    y_eval = image_shape[0]*ym_per_pix
     
     left_lane_center = left_fit[0]*y_eval**2 + left_fit[1]*y_eval + left_fit[2]
     right_lane_center = right_fit[0]*y_eval**2 + right_fit[1]*y_eval + right_fit[2]
@@ -313,7 +313,6 @@ def get_deviation_from_center(image_shape, poly_meters, xm_per_pix):
     lane_center = left_lane_center + (right_lane_center - left_lane_center)/2
     image_center = image_shape[1]/2 * xm_per_pix
     offset_in_metters = image_center - lane_center # Negative if we are in the left and positive if we are in the right
-    # TODO check that this is happening
     
     return offset_in_metters
 
@@ -423,7 +422,7 @@ def pipeline(image, camera_calibration, perspective_matrix, meters_per_pix):
     
     # Determine the curvature of the lane and vehicle position with respect to center.
     curvature, polynomials_in_meters = get_curvature_in_meters(birds_eye, pixels, xm_per_pix, ym_per_pix)
-    deviation = get_deviation_from_center(birds_eye.shape, polynomials_in_meters, xm_per_pix)
+    deviation = get_deviation_from_center(birds_eye.shape, polynomials_in_meters, xm_per_pix, ym_per_pix)
     
     # TODO it lacks the definition of parameters xm_per_pix, ym_per_pix
     
