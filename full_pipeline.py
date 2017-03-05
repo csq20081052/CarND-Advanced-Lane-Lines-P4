@@ -252,9 +252,6 @@ def visualize_detected_lines(image, windows, pixels, poly):
         out_image[r_window][ out_image[r_window] == 0] = red
     """
     
-    
-    (win_xleft_low,win_y_low),(win_xleft_high,win_y_high)
-    
     # Dray fitted curves
     # Generate x and y values for plotting
     ploty = np.linspace(0, image.shape[0]-1, image.shape[0] )
@@ -262,14 +259,25 @@ def visualize_detected_lines(image, windows, pixels, poly):
     right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
 
 
-    plt.figure(figsize=(10, 8))
+    fig = plt.figure(figsize=(10, 8))
     plt.imshow(out_img)
     plt.plot(left_fitx, ploty, color='yellow', linewidth=6)
     plt.plot(right_fitx, ploty, color='yellow', linewidth=6)
     plt.xlim(0, 1280)
     plt.ylim(720, 0)
     
+    fig.canvas.draw()
+    result = np.fromstring(fig.canvas.tostring_rgb(), dtype='uint8')
+    result = result.reshape(fig.canvas.get_width_height()[::-1] + (3,))
     
+    return result
+
+    
+def detected_tight(img):
+    # When saving from matplotlib figures, it creates unwanted white spaces. Hence, we crop it here.
+    return img[125:435, 90:645]
+
+
 def get_curvature_in_meters(image, pixels, xm_per_pix, ym_per_pix):
     
     left_lane_inds = pixels[0]
@@ -399,7 +407,7 @@ def load_parameters():
     return camera_calibration, perspective_matrix, meters_per_pix
 
 
-def pipeline(image, camera_calibration, perspective_matrix, meters_per_pix):
+def pipeline(image, camera_calibration, perspective_matrix, meters_per_pix, control_panel=False):
     
     xm_per_pix, ym_per_pix = meters_per_pix
     M = perspective_matrix['M']
@@ -431,6 +439,12 @@ def pipeline(image, camera_calibration, perspective_matrix, meters_per_pix):
     
     # Output visual display of the lane boundaries and numerical estimation of lane curvature and vehicle position.
     final_image = draw_stats(image_lane, curvature, deviation)
+    
+    if control_panel:
+        # Let's create a cool visualization. 
+        detected = visualize_detected_lines(birds_eye, windows, pixels, polynomials)
+        warped = perspective(undistorted, M)
+        final_image = control_panel(final_image, thresholded, warped, detected_tight(detected))
 
     return final_image
 
@@ -448,3 +462,25 @@ def visualize_before_after(image_before, image_after, cmap=None):
     else:
         plt.imshow(image_after)
     plt.title("Image after")
+    
+    
+def control_panel(final, thresholded, warped, detected):
+    
+    panel = 200*np.ones((810, 1440, 3), np.uint8) # Gray panel
+    
+    #  Resize everything
+    final_res = cv2.resize(final,(960, 540), interpolation = cv2.INTER_CUBIC)
+    thresholded_res = cv2.resize(thresholded,(480, 270), interpolation = cv2.INTER_CUBIC)
+    thresholded_res = 255*np.dstack((thresholded_res, thresholded_res, thresholded_res)) # To make it RGB
+    warped_res = cv2.resize(warped,(480, 270), interpolation = cv2.INTER_CUBIC)
+    detected_res = cv2.resize(detected,(480, 270), interpolation = cv2.INTER_CUBIC)
+    
+    # Place each one in the panel
+    panel[:540, :960, :] = final_res
+    panel[540:, 960-480+1:960+1, :] = thresholded_res
+    panel[540-270+1:540+1, 960:, :] = warped_res
+    panel[540:, 960:, :] = detected_res
+        
+    panel = cv2.resize(panel, (1280, 720), interpolation = cv2.INTER_CUBIC)
+    
+    return panel
