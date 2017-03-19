@@ -1,4 +1,4 @@
-##Advanced Lane Finding Project
+## Advanced Lane Finding Project
 
 
 
@@ -15,17 +15,17 @@ The goals / steps of this project are the following:
 
 
 ## [Rubric](https://review.udacity.com/#!/rubrics/571/view) Points
-###Here I will consider the rubric points individually and describe how I addressed each point in my implementation.  
+### Here I will consider the rubric points individually and describe how I addressed each point in my implementation.  
 
 ---
-###Writeup / README
+### Writeup / README
 
 ####1. Provide a Writeup / README that includes all the rubric points and how you addressed each one.  You can submit your writeup as markdown or pdf.  [Here](https://github.com/udacity/CarND-Advanced-Lane-Lines/blob/master/writeup_template.md) is a template writeup for this project you can use as a guide and a starting point.  
 
 You're reading it!
 ###Camera Calibration
 
-####1. Briefly state how you computed the camera matrix and distortion coefficients. Provide an example of a distortion corrected calibration image.
+#### 1. Briefly state how you computed the camera matrix and distortion coefficients. Provide an example of a distortion corrected calibration image.
 
 This part was accomplished in the `Camera calibration.ipynb` notebook,
 
@@ -36,9 +36,9 @@ When I had prepare both set of points, it was just a matter of calling `cv2.undi
 ![Calibration image](./images_4_doc/chessboard.png)
 
 
-###Pipeline (single images)
+### Pipeline (single images)
 
-####1. Provide an example of a distortion-corrected image.
+#### 1. Provide an example of a distortion-corrected image.
 <a name="Provide-an-example-of-a-distortion-corrected-image"/></a>
 After calibrating the camera, a test needed to be done. Hence, I tried with one of the test images: 
 
@@ -52,7 +52,7 @@ At the begining I tested it with `test2.jpg` but was very difficult to appreciat
 Distortion-free: `test1_undistorted.jpg`
 ![Undistorted image](./images_4_doc/test1_undistorted.jpg)
 
-####2. Describe how (and identify where in your code) you used color transforms, gradients or other methods to create a thresholded binary image.  Provide an example of a binary image result.
+#### 2. Describe how (and identify where in your code) you used color transforms, gradients or other methods to create a thresholded binary image.  Provide an example of a binary image result.
 
 This part was accomplished in `Pipeline_part1.ipynb`
 
@@ -73,7 +73,7 @@ And this was the result:
 
 ![Thresholds](./images_4_doc/thresholds.png)
 
-####3. Describe how (and identify where in your code) you performed a perspective transform and provide an example of a transformed image.
+#### 3. Describe how (and identify where in your code) you performed a perspective transform and provide an example of a transformed image.
 
 I performed the perspective transform in `Pipeline_part1.ipynb`. A test image was opened in an image editor to measure X and Y coordinates that I found were relevant for the transformation. After that, I plotted them in the image and drew a polygon on top (see image below), to check everything was working as expected.
 
@@ -99,7 +99,7 @@ If a `threshold` call is placed between `undistort` and `perspective`, this is t
 It was necesary to do the threshold before the perspective transformation because the gradients' direction threshold was tuned before perspective. Otherwise we will have a worse segmentation.
 
 
-####4. Describe how (and identify where in your code) you identified lane-line pixels and fit their positions with a polynomial?
+#### 4. Describe how (and identify where in your code) you identified lane-line pixels and fit their positions with a polynomial?
 
 This part is achieved in `Pipeline_part2.ipynb`. I follow the approach presented in the classroom. At the begining, selecting the half of the image to do the histogram didn't convenced me enough, I thought it was too big portion of the image, in case of a heavy curve, it will introduce some error. However, experimentally I saw it was a good idea, specially when dashed lines appeared at top of the image (meaning that no line was detected at the bottom).
 
@@ -115,7 +115,7 @@ Test2:
 
 Test2 image's visualization is very important as it shows that even with a carefully tuned pipeline, the algorithm can work in unexpected ways. Despite the fact that the right line was straight, the information contained in the image after thresholding and a perspective transformation, leaded the detection algorithm to fit a order 2 polynomial too curved.
 
-####5. Describe how (and identify where in your code) you calculated the radius of curvature of the lane and the position of the vehicle with respect to center.
+#### 5. Describe how (and identify where in your code) you calculated the radius of curvature of the lane and the position of the vehicle with respect to center.
 
 In `Pipeline_part2.ipynb` a `get_curvature` function is used to compute the curvature of the left and right lines limiting the lane. The mathematical operations were done based on the polynomials fitted in the previous step. However, the result was .. what? The curvature was measured in pixels, which means nothing in the world space. A mapping pixel <-> meters was done using known object's sizes that appeared in the image. To be more exact: the width of the lane and the length of the dashed lines. 
 
@@ -126,7 +126,7 @@ After obtaining that conversion in the bird-eye view of the lane, `get_curvature
 To compute the deviation from the center it was measured the center between the lane's lines and the center of the image and compared. After some test, the conversion factor to meters was added (where was my head?). This operations were packed in `get_deviation_from_center`.
 
 
-####6. Provide an example image of your result plotted back down onto the road such that the lane area is identified clearly.
+#### 6. Provide an example image of your result plotted back down onto the road such that the lane area is identified clearly.
 
 Instead of a "simple" image with the result, I prefer to link here the ouput images from the function `control_panel` created in `Pipeline_part2.ipynb`. It shows the final result with the result plotted back on the road, but also the result of different stages in the processing pipeline (extremely useful for debugging).
 
@@ -138,9 +138,9 @@ Instead of a "simple" image with the result, I prefer to link here the ouput ima
 
 ---
 
-###Pipeline (video)
+### Pipeline (video)
 
-####1. Provide a link to your final video output.  Your pipeline should perform reasonably well on the entire project video (wobbly lines are ok but no catastrophic failures that would cause the car to drive off the road!).
+#### 1. Provide a link to your final video output.  Your pipeline should perform reasonably well on the entire project video (wobbly lines are ok but no catastrophic failures that would cause the car to drive off the road!).
 
 Here's a [link to my video result](https://youtu.be/aHXLlSVbrLI)
 
@@ -152,9 +152,9 @@ alt="IMAGE ALT TEXT HERE" width="240" height="180" border="10" /></a>
 
 ---
 
-###Discussion
+### Discussion
 
-####1. Briefly discuss any problems / issues you faced in your implementation of this project.  Where will your pipeline likely fail?  What could you do to make it more robust?
+#### 1. Briefly discuss any problems / issues you faced in your implementation of this project.  Where will your pipeline likely fail?  What could you do to make it more robust?
 
 This version of the Lane Lines finding is far more robust than the first one accomplished at the begining of this nanodegree. However, there is still room to improve.
 
