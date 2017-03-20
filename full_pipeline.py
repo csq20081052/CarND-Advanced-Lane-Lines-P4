@@ -269,6 +269,7 @@ def visualize_detected_lines(image, windows, pixels, poly):
     fig.canvas.draw()
     result = np.fromstring(fig.canvas.tostring_rgb(), dtype='uint8')
     result = result.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+    plt.close('all')
     
     return result
 
@@ -432,8 +433,6 @@ def pipeline(image, camera_calibration, perspective_matrix, meters_per_pix, ret_
     curvature, polynomials_in_meters = get_curvature_in_meters(birds_eye, pixels, xm_per_pix, ym_per_pix)
     deviation = get_deviation_from_center(birds_eye.shape, polynomials_in_meters, xm_per_pix, ym_per_pix)
     
-    # TODO it lacks the definition of parameters xm_per_pix, ym_per_pix
-    
     # Warp the detected lane boundaries back onto the original image.
     image_lane = draw_lane_unwarped(image, birds_eye, polynomials, pixels, inv_M)
     
@@ -444,7 +443,7 @@ def pipeline(image, camera_calibration, perspective_matrix, meters_per_pix, ret_
         # Let's create a cool visualization. 
         detected = visualize_detected_lines(birds_eye, windows, pixels, polynomials)
         warped = perspective(undistorted, M)
-        final_image = control_panel(final_image, thresholded, warped, detected_tight(detected))
+        final_image = control_panel(final_image, thresholded, birds_eye, warped, detected_tight(detected))
 
     return final_image
 
@@ -464,7 +463,7 @@ def visualize_before_after(image_before, image_after, cmap=None):
     plt.title("Image after")
     
     
-def control_panel(final, thresholded, warped, detected):
+def control_panel(final, thresholded, thresholded_warped, warped, detected):
     
     panel = 200*np.ones((810, 1440, 3), np.uint8) # Gray panel
     
@@ -472,13 +471,16 @@ def control_panel(final, thresholded, warped, detected):
     final_res = cv2.resize(final,(960, 540), interpolation = cv2.INTER_CUBIC)
     thresholded_res = cv2.resize(thresholded,(480, 270), interpolation = cv2.INTER_CUBIC)
     thresholded_res = 255*np.dstack((thresholded_res, thresholded_res, thresholded_res)) # To make it RGB
+    thresholded_warped_res = cv2.resize(thresholded_warped,(480, 270), interpolation = cv2.INTER_CUBIC)
+    thresholded_warped_res = 255*np.dstack((thresholded_warped_res, thresholded_warped_res, thresholded_warped_res)) # To make it RGB
     warped_res = cv2.resize(warped,(480, 270), interpolation = cv2.INTER_CUBIC)
     detected_res = cv2.resize(detected,(480, 270), interpolation = cv2.INTER_CUBIC)
     
     # Place each one in the panel
     panel[:540, :960, :] = final_res
     panel[540:, 960-480+1:960+1, :] = thresholded_res
-    panel[540-270+1:540+1, 960:, :] = warped_res
+    panel[:270, 960:, :] = warped_res
+    panel[540-270+1:540+1, 960:, :] = thresholded_warped_res
     panel[540:, 960:, :] = detected_res
         
     panel = cv2.resize(panel, (1280, 720), interpolation = cv2.INTER_CUBIC)
