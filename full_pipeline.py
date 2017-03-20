@@ -55,7 +55,7 @@ def dilation(image):
 
 def combine_color_gradient_postpro(thresholded_color, thresholded_gradient):
     
-    thresholded_combined = thresholded_color & dilation(thresholded_gradient)
+    thresholded_combined = thresholded_color | dilation(thresholded_gradient)
     
     kernel = np.ones((3,3), np.uint8)
     eroded = cv2.erode(thresholded_combined, kernel, iterations=1)
@@ -193,8 +193,14 @@ def detect_lanes(image, base=None):
         # If you found > minpix pixels, recenter next window on their mean position
         if len(good_left_inds) > minpix:
             leftx_current = np.int(np.mean(nonzerox[good_left_inds]))
+            margin = 100
+        else:
+            margin = 150
         if len(good_right_inds) > minpix:        
             rightx_current = np.int(np.mean(nonzerox[good_right_inds]))
+            margin = 100
+        else:
+            margin = 150
 
     # Concatenate the arrays of indices
     left_lane_inds = np.concatenate(left_lane_inds)
@@ -280,6 +286,10 @@ def detected_tight(img):
 
 
 def get_curvature_in_meters(image, pixels, xm_per_pix, ym_per_pix):
+    """
+    Note: the original equation included taking absolute value of the denominator, however, if we don't do it, we
+    can have not only the degree of curvature but the orientation too. That version is what is implemented here.
+    """
     
     left_lane_inds = pixels[0]
     right_lane_inds = pixels[1]
@@ -298,8 +308,8 @@ def get_curvature_in_meters(image, pixels, xm_per_pix, ym_per_pix):
     right_fit_cr = np.polyfit(righty*ym_per_pix, rightx*xm_per_pix, 2)
 
     y_eval = image.shape[0]
-    left_curverad = ((1 + (2*left_fit_cr[0]*y_eval*ym_per_pix + left_fit_cr[1])**2)**1.5) / np.abs(2*left_fit_cr[0])
-    right_curverad = ((1 + (2*right_fit_cr[0]*y_eval*ym_per_pix + right_fit_cr[1])**2)**1.5) / np.abs(2*right_fit_cr[0])
+    left_curverad = ((1 + (2*left_fit_cr[0]*y_eval*ym_per_pix + left_fit_cr[1])**2)**1.5) / (2*left_fit_cr[0])
+    right_curverad = ((1 + (2*right_fit_cr[0]*y_eval*ym_per_pix + right_fit_cr[1])**2)**1.5) / (2*right_fit_cr[0])
 
     poly = [left_fit_cr, right_fit_cr]
     curvature = [left_curverad, right_curverad]
