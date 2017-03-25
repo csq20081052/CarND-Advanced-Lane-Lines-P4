@@ -5,6 +5,8 @@ import pickle
 import numpy as np
 import pylab as plt
 
+from functools import reduce
+
 
 def undistort(image, camera_calibration):
     mtx = camera_calibration['mtx']
@@ -56,6 +58,9 @@ def dilation(image):
 def combine_color_gradient_postpro(thresholded_color, thresholded_gradient):
     
     thresholded_combined = thresholded_color | dilation(thresholded_gradient)
+    # If it's needed to be more selective when thresholding, the following line is more suitable.
+    # However, it needs a higher buffer (size 20) for temporal smoothing to achieve good results.
+    # thresholded_combined = thresholded_color & dilation(thresholded_gradient)
     
     kernel = np.ones((3,3), np.uint8)
     eroded = cv2.erode(thresholded_combined, kernel, iterations=1)
@@ -91,15 +96,15 @@ def threshold(image):
 
 def compute_perspective_mat(image, invert=False):
     h, w = image.shape[:2]
-    h_offset = 20 # height offset for dst points
-    w_offset = 150 # width offset
+    h_offset = 35 # height offset for dst points
+    w_offset = 100 # width offset
     
-    points_of_interest = np.float32([(736, 466), # 1st point 
+    points_of_interest = np.float32([(756, 466), # 1st point 
                                  (837, 527), # 2nd point
-                                 (1039, 651), # 3rd point
-                                 (336, 651), # 4th point
+                                 (1076, 651), # 3rd point
+                                 (246, 651), # 4th point
                                  (496, 527), # 5th point
-                                 (586, 466)]) # 6th point
+                                 (566, 466)]) # 6th point
 
     # Source points
     src = points_of_interest[[0, 2, 3, 5],:] # Biggest trapezoid
@@ -127,7 +132,12 @@ def perspective(image, M):
     return warped
 
 
-def detect_lanes(image, base=None):
+def detect_lanes(img, birds_eye_buffer, base=None):
+    
+    if birds_eye_buffer:
+        image = img | reduce((lambda x, y: x | y), birds_eye_buffer)
+    else:
+        image = img.copy()
     
     if base:
         leftx_base = base[0]
@@ -145,7 +155,7 @@ def detect_lanes(image, base=None):
     
     
     # Choose the number of sliding windows
-    nwindows = 9
+    nwindows = 15
     # Set height of windows
     window_height = np.int(image.shape[0]/nwindows)
     # Identify the x and y positions of all nonzero pixels in the image
@@ -195,12 +205,12 @@ def detect_lanes(image, base=None):
             leftx_current = np.int(np.mean(nonzerox[good_left_inds]))
             margin = 100
         else:
-            margin = 150
+            margin = 180
         if len(good_right_inds) > minpix:        
             rightx_current = np.int(np.mean(nonzerox[good_right_inds]))
             margin = 100
         else:
-            margin = 150
+            margin = 180
 
     # Concatenate the arrays of indices
     left_lane_inds = np.concatenate(left_lane_inds)
@@ -220,7 +230,7 @@ def detect_lanes(image, base=None):
     pixels = [left_lane_inds, right_lane_inds]
     poly = [left_fit, right_fit]
     
-    return windows, pixels, poly
+    return windows, pixels, poly, image
 
 
 def visualize_detected_lines(image, windows, pixels, poly):
@@ -282,7 +292,7 @@ def visualize_detected_lines(image, windows, pixels, poly):
     
 def detected_tight(img):
     # When saving from matplotlib figures, it creates unwanted white spaces. Hence, we crop it here.
-    return img[125:435, 90:645]
+    return img[130:435, 91:645]
 
 
 def get_curvature_in_meters(image, pixels, xm_per_pix, ym_per_pix):
@@ -418,7 +428,7 @@ def load_parameters():
     return camera_calibration, perspective_matrix, meters_per_pix
 
 
-def pipeline(image, camera_calibration, perspective_matrix, meters_per_pix, ret_control_panel=False):
+def pipeline(image, camera_calibration, perspective_matrix, meters_per_pix, birds_eye_buffer, ret_control_panel=False):
     
     xm_per_pix, ym_per_pix = meters_per_pix
     M = perspective_matrix['M']
@@ -434,28 +444,28 @@ def pipeline(image, camera_calibration, perspective_matrix, meters_per_pix, ret_
     thresholded, _, _ = threshold(undistorted)
     
     # Apply a perspective transform to rectify binary image ("birds-eye view").
-    birds_eye = perspective(thresholded, M)
+    birds_eye_th = perspective(thresholded, M)
     
     # Detect lane pixels and fit to find the lane boundary.
-    windows, pixels, polynomials = detect_lanes(birds_eye)
+    windows, pixels, polynomials, smoothed_img = detect_lanes(birds_eye_th, birds_eye_buffer)
     
     # Determine the curvature of the lane and vehicle position with respect to center.
-    curvature, polynomials_in_meters = get_curvature_in_meters(birds_eye, pixels, xm_per_pix, ym_per_pix)
-    deviation = get_deviation_from_center(birds_eye.shape, polynomials_in_meters, xm_per_pix, ym_per_pix)
+    curvature, polynomials_in_meters = get_curvature_in_meters(smoothed_img, pixels, xm_per_pix, ym_per_pix)
+    deviation = get_deviation_from_center(smoothed_img.shape, polynomials_in_meters, xm_per_pix, ym_per_pix)
     
     # Warp the detected lane boundaries back onto the original image.
-    image_lane = draw_lane_unwarped(image, birds_eye, polynomials, pixels, inv_M)
+    image_lane = draw_lane_unwarped(image, smoothed_img, polynomials, pixels, inv_M)
     
     # Output visual display of the lane boundaries and numerical estimation of lane curvature and vehicle position.
     final_image = draw_stats(image_lane, curvature, deviation)
     
     if ret_control_panel:
         # Let's create a cool visualization. 
-        detected = visualize_detected_lines(birds_eye, windows, pixels, polynomials)
-        warped = perspective(undistorted, M)
-        final_image = control_panel(final_image, thresholded, birds_eye, warped, detected_tight(detected))
+        detected = visualize_detected_lines(smoothed_img, windows, pixels, polynomials)
+        orig_warped = perspective(undistorted, M)
+        final_image = control_panel(final_image, thresholded, orig_warped, birds_eye_th, smoothed_img, detected_tight(detected))
 
-    return final_image
+    return final_image, birds_eye_th
 
 
 def visualize_before_after(image_before, image_after, cmap=None):
@@ -472,26 +482,47 @@ def visualize_before_after(image_before, image_after, cmap=None):
         plt.imshow(image_after)
     plt.title("Image after")
     
-    
-def control_panel(final, thresholded, thresholded_warped, warped, detected):
+
+def control_panel(final, thresholded, orig_warped, thresholded_warped, smoothed_thresholded_warped, detected):
     
     panel = 200*np.ones((810, 1440, 3), np.uint8) # Gray panel
     
     #  Resize everything
     final_res = cv2.resize(final,(960, 540), interpolation = cv2.INTER_CUBIC)
     thresholded_res = cv2.resize(thresholded,(480, 270), interpolation = cv2.INTER_CUBIC)
-    thresholded_res = 255*np.dstack((thresholded_res, thresholded_res, thresholded_res)) # To make it RGB
+    thresholded_res = 255*np.dstack((thresholded_res,)*3) # To make it RGB
     thresholded_warped_res = cv2.resize(thresholded_warped,(480, 270), interpolation = cv2.INTER_CUBIC)
-    thresholded_warped_res = 255*np.dstack((thresholded_warped_res, thresholded_warped_res, thresholded_warped_res)) # To make it RGB
-    warped_res = cv2.resize(warped,(480, 270), interpolation = cv2.INTER_CUBIC)
+    thresholded_warped_res = 255*np.dstack((thresholded_warped_res,)*3) # To make it RGB
+    warped_res = cv2.resize(orig_warped,(480, 270), interpolation = cv2.INTER_CUBIC)
     detected_res = cv2.resize(detected,(480, 270), interpolation = cv2.INTER_CUBIC)
+    smoothed_thresholded_warped_res = cv2.resize(smoothed_thresholded_warped,(480, 270), interpolation = cv2.INTER_CUBIC)
+    smoothed_thresholded_warped_res = 255*np.dstack((smoothed_thresholded_warped_res,)*3 ) # To make it RGB
     
-    # Place each one in the panel
+    # Draw titles
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    
+    cv2.putText(thresholded_res, 'Thresholded' , (155, 40), font, 1, (0, 255, 0), 1, cv2.LINE_AA)
+    
+    cv2.putText(warped_res, 'Warped' , (130, 50), font, 1, (0, 255, 0), 1, cv2.LINE_AA)
+    
+    cv2.putText(thresholded_warped_res, 'Thresholded' , (130, 40), font, 1, (0, 255, 0), 1, cv2.LINE_AA)
+    cv2.putText(thresholded_warped_res, 'and warped' , (130, 80), font, 1, (0, 255, 0), 1, cv2.LINE_AA)
+    
+    cv2.putText(smoothed_thresholded_warped_res, 'Temporal' , (130, 40), font, 1, (0, 255, 0), 1, cv2.LINE_AA)
+    cv2.putText(smoothed_thresholded_warped_res, 'smoothing' , (130, 80), font, 1, (0, 255, 0), 1, cv2.LINE_AA)
+    
+    cv2.putText(detected_res, 'Detected' , (130, 40), font, 1, (0, 255, 0), 1, cv2.LINE_AA)
+    cv2.putText(detected_res, 'lines' , (130, 80), font, 1, (0, 255, 0), 1, cv2.LINE_AA)
+    
+    
+    # Place each view in the panel
     panel[:540, :960, :] = final_res
-    panel[540:, 960-480+1:960+1, :] = thresholded_res
+    panel[540:, :480, :] = thresholded_res
+    panel[540:, 960-480+1:960+1, :] = detected_res 
     panel[:270, 960:, :] = warped_res
     panel[540-270+1:540+1, 960:, :] = thresholded_warped_res
-    panel[540:, 960:, :] = detected_res
+    panel[540:, 960:, :] = smoothed_thresholded_warped_res
+    
         
     panel = cv2.resize(panel, (1280, 720), interpolation = cv2.INTER_CUBIC)
     
